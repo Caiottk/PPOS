@@ -28,6 +28,7 @@ typedef struct task_t
    int est;
    int din;
    int sys;
+   int quantum;
 } task_t ;
 
 // estrutura que define um semáforo

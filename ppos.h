@@ -218,6 +218,9 @@ int after_mqueue_msgs (mqueue_t *queue) ;
 // funcao para debug. imprime os campos da estrutura task_t
 void print_tcb( task_t* task );
 
+// funcao que lida com os ticks do processador
+void trataTicks (int signum);
+
 //==============================================================================
 
 // Redefinir funcoes POSIX "proibidas" como "FORBIDDEN" (gera erro ao compilar)
