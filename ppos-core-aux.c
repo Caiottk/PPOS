@@ -8,6 +8,9 @@
 // ****************************************************************************
 #define DEF_TICKS 20;
 
+// variáveis globais que auxiliam na contabilização de tempo da tarefa no processador
+int auxInProc, auxEndProc;
+
 // estrutura que define um tratador de sinal (deve ser global ou static)
 static struct sigaction action;
 
@@ -16,20 +19,35 @@ static struct itimerval timer;
 
 void trataTicks(int signum)
 {
-    taskExec->quantum--;
+    systemTime++;
     if (taskExec != taskDisp)
     {
         if (taskExec->quantum >= 0)
-        {
-            taskExec->quantum = DEF_TICKS;
+            taskExec->quantum--;
+        else
             task_yield();
-        }
     }
 }
 
 void before_ppos_init()
 {
-    // put your customization here+-
+
+    // put your customization here
+
+#ifdef DEBUG
+    printf("\ninit - BEFORE");
+#endif
+}
+
+void after_ppos_init()
+{
+    // put your customization here
+    systemTime = 0;
+    taskMain->quantum = DEF_TICKS;
+    taskMain->tExec = systime();
+    taskMain->act = 0;
+    auxInProc = 0;
+    auxEndProc = 0;
     // registra a ação para o sinal de timer SIGALRM
     action.sa_handler = trataTicks;
     sigemptyset(&action.sa_mask);
@@ -40,7 +58,7 @@ void before_ppos_init()
         exit(1);
     }
     // ajusta valores do temporizador
-    timer.it_value.tv_usec = 500;     // primeiro disparo, em micro-segundos
+    timer.it_value.tv_usec = 1000;    // primeiro disparo, em micro-segundos
     timer.it_value.tv_sec = 0;        // primeiro disparo, em segundos
     timer.it_interval.tv_usec = 1000; // disparos subsequentes, em micro-segundos
     timer.it_interval.tv_sec = 0;     // disparos subsequentes, em segundos
@@ -53,14 +71,6 @@ void before_ppos_init()
     }
 
 #ifdef DEBUG
-    printf("\ninit - BEFORE");
-#endif
-}
-
-void after_ppos_init()
-{
-    // put your customization here
-#ifdef DEBUG
     printf("\ninit - AFTER");
 #endif
 }
@@ -68,10 +78,6 @@ void after_ppos_init()
 void before_task_create(task_t *task)
 {
     // put your customization here
-    if (task != taskDisp)
-    {
-        task->quantum = 20;
-    }
 #ifdef DEBUG
     printf("\ntask_create - BEFORE - [%d]", task->id);
 #endif
@@ -80,6 +86,11 @@ void before_task_create(task_t *task)
 void after_task_create(task_t *task)
 {
     // put your customization here
+    task->tExec = systime();
+    if (task != taskDisp)
+    {
+        task->quantum = DEF_TICKS;
+    }
 #ifdef DEBUG
     printf("\ntask_create - AFTER - [%d]", task->id);
 #endif
@@ -88,6 +99,15 @@ void after_task_create(task_t *task)
 void before_task_exit()
 {
     // put your customization here
+    taskExec->tExec = systime() - taskExec->tExec;
+    printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
+           taskExec->id, taskExec->tExec, taskExec->tProc, taskExec->act);
+    if (countTasks <= 2)
+    {
+        printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
+               taskDisp->id, taskExec->tExec, taskDisp->tProc, taskDisp->act);
+    }
+
 #ifdef DEBUG
     printf("\ntask_exit - BEFORE - [%d]", taskExec->id);
 #endif
@@ -104,6 +124,13 @@ void after_task_exit()
 void before_task_switch(task_t *task)
 {
     // put your customization here
+    auxEndProc = systime();
+    taskExec->tProc += auxEndProc - auxInProc;
+    taskExec->act++;
+    if (task != NULL)
+    {
+        task->quantum = DEF_TICKS;
+    }
 #ifdef DEBUG
     printf("\ntask_switch - BEFORE - [%d -> %d]", taskExec->id, task->id);
 #endif
@@ -112,6 +139,7 @@ void before_task_switch(task_t *task)
 void after_task_switch(task_t *task)
 {
     // put your customization here
+    auxInProc = systime();
 #ifdef DEBUG
     printf("\ntask_switch - AFTER - [%d -> %d]", taskExec->id, task->id);
 #endif

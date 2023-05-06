@@ -27,8 +27,10 @@ typedef struct task_t
    // ... (outros campos deve ser adicionados APOS esse comentario)
    int est;
    int din;
-   int sys;
    int quantum;
+   int tExec;
+   int tProc;
+   int act;
 } task_t ;
 
 // estrutura que define um semáforo
