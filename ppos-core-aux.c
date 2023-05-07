@@ -517,8 +517,11 @@ int after_mqueue_msgs(mqueue_t *queue)
 task_t *scheduler()
 {
     task_t *taskAux, *minPrio;
-    taskAux = readyQueue;
+    taskAux = readyQueue; // temos o endereço para a primeira tarefa da lista circular
     minPrio = taskAux;
+    // percorre a lista em busca da tarefa com prioridade de menor valor, condição de parada é a task que estava como primeira da lista
+    // quando temos tasks com prioridades dinâmicas iguais, o desempate é feito pela prioridade estática
+    // lembrar que UNIX usa uma escala que vai de −20 a +19, negativa (valore maiores indicam menor prioridade)
     do
     {
         taskAux = taskAux->next;
@@ -529,19 +532,21 @@ task_t *scheduler()
                 minPrio = taskAux;
     } while (taskAux != readyQueue);
     taskAux = readyQueue;
+    // percorre a lista novamente e envelhece todas as prioridades dinâmicas de todas as tarefas
     do
     {
         if (taskAux->din > -20)
             taskAux->din--;
         taskAux = taskAux->next;
     } while (taskAux != readyQueue);
-
+    //Depois de encontrarmos a tarefa que usará o processador, sua prioridade dinâmica volta para a inicial, que é a estática
     minPrio->din = minPrio->est;
     return minPrio;
 }
 
 void task_setprio(task_t *task, int prio)
 {
+    //condição para setar a prioridade, prioridade dinâmica e estática começam com o mesmo valor definido
     if (task != NULL)
     {
         task->din = prio;
@@ -556,6 +561,7 @@ void task_setprio(task_t *task, int prio)
 
 int task_getprio(task_t *task)
 {
+    //get da prioridade estática
     if (task != NULL)
         return task->est;
     return taskExec->est;

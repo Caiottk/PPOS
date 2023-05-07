@@ -1,0 +1,148 @@
+void trataTicks(int signum)
+{
+    systemTime++;
+    if (taskExec != taskDisp)
+    {
+        if (taskExec->quantum >= 0)
+            taskExec->quantum--;
+        else
+            task_yield();
+    }
+}
+
+void after_ppos_init()
+{
+    // put your customization here
+    systemTime = 0;
+    taskMain->quantum = DEF_TICKS;
+    taskMain->tExec = systime();
+    taskMain->act = 0;
+    auxInProc = 0;
+    auxEndProc = 0;
+    // registra a ação para o sinal de timer SIGALRM
+    action.sa_handler = trataTicks;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    if (sigaction(SIGALRM, &action, 0) < 0)
+    {
+        perror("Erro em sigaction: ");
+        exit(1);
+    }
+    // ajusta valores do temporizador
+    timer.it_value.tv_usec = 1000;    // primeiro disparo, em micro-segundos
+    timer.it_value.tv_sec = 0;        // primeiro disparo, em segundos
+    timer.it_interval.tv_usec = 1000; // disparos subsequentes, em micro-segundos
+    timer.it_interval.tv_sec = 0;     // disparos subsequentes, em segundos
+
+    // arma o temporizador ITIMER_REAL (vide man setitimer)
+    if (setitimer(ITIMER_REAL, &timer, 0) < 0)
+    {
+        perror("Erro em setitimer: ");
+        exit(1);
+    }
+
+#ifdef DEBUG
+    printf("\ninit - AFTER");
+#endif
+}
+
+void after_task_create(task_t *task)
+{
+    // put your customization here
+    task->tExec = systime();
+    if (task != taskDisp)
+    {
+        task->quantum = DEF_TICKS;
+    }
+#ifdef DEBUG
+    printf("\ntask_create - AFTER - [%d]", task->id);
+#endif
+}
+
+void before_task_exit()
+{
+    // put your customization here
+    taskExec->tExec = systime() - taskExec->tExec;
+    printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
+           taskExec->id, taskExec->tExec, taskExec->tProc, taskExec->act);
+    if (countTasks <= 2)
+    {
+        printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
+               taskDisp->id, taskExec->tExec, taskDisp->tProc, taskDisp->act);
+    }
+
+#ifdef DEBUG
+    printf("\ntask_exit - BEFORE - [%d]", taskExec->id);
+#endif
+}
+
+void before_task_switch(task_t *task)
+{
+    // put your customization here
+    auxEndProc = systime();
+    taskExec->tProc += auxEndProc - auxInProc;
+    taskExec->act++;
+    if (task != NULL)
+    {
+        task->quantum = DEF_TICKS;
+    }
+#ifdef DEBUG
+    printf("\ntask_switch - BEFORE - [%d -> %d]", taskExec->id, task->id);
+#endif
+}
+
+void after_task_switch(task_t *task)
+{
+    // put your customization here
+    auxInProc = systime();
+#ifdef DEBUG
+    printf("\ntask_switch - AFTER - [%d -> %d]", taskExec->id, task->id);
+#endif
+}
+
+task_t *scheduler()
+{
+    task_t *taskAux, *minPrio;
+    taskAux = readyQueue;
+    minPrio = taskAux;
+    do
+    {
+        taskAux = taskAux->next;
+        if (taskAux->din < minPrio->din)
+            minPrio = taskAux;
+        else if (taskAux->din == minPrio->din)
+            if (taskAux->est < minPrio->est)
+                minPrio = taskAux;
+    } while (taskAux != readyQueue);
+    taskAux = readyQueue;
+    do
+    {
+        if (taskAux->din > -20)
+            taskAux->din--;
+        taskAux = taskAux->next;
+    } while (taskAux != readyQueue);
+
+    minPrio->din = minPrio->est;
+    return minPrio;
+}
+
+void task_setprio(task_t *task, int prio)
+{
+    if (task != NULL)
+    {
+        task->din = prio;
+        task->est = prio;
+    }
+    else
+    {
+        taskExec->din = prio;
+        taskExec->est = prio;
+    }
+}
+
+int task_getprio(task_t *task)
+{
+    if (task != NULL)
+        return task->est;
+    return taskExec->est;
+}
