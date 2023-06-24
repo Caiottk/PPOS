@@ -11,11 +11,28 @@
 // a um dispositivo de entrada/saida orientado a blocos,
 // tipicamente um disco rigido.
 
+typedef struct disk_request_t
+{
+  
+  struct disk_request_t *prev;
+  struct disk_request_t *next; // ponteiros para usar em fila 
+  task_t *task; // pede o disco
+  int op; // read ou write
+  int block;
+  void *buffer;
+} disk_request_t;
+
 // estrutura que representa um disco no sistema operacional
-typedef struct
+typedef struct disk_t
 {
   // completar com os campos necessarios
-} disk_t ;
+  struct disk_request_t *queue; // fila responsável pela requisição dos discos
+  semaphore_t ac; // semáforo que permite acesso ao disco
+  task_t *wait; // tarefa responsável pelo estado de ocupado do disco
+  int numBlocks; // qtd de blocos
+  int blockSize; // tam do bloco
+  int sig;
+} disk_t;
 
 // inicializacao do gerente de disco
 // retorna -1 em erro ou 0 em sucesso

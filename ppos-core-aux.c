@@ -25,7 +25,10 @@ void trataTicks(int signum)
         if (taskExec->quantum >= 0)
             taskExec->quantum--;
         else
+        {
+            taskExec->state = 'R';
             task_yield();
+        }
     }
 }
 
@@ -41,6 +44,7 @@ void before_ppos_init()
 
 void after_ppos_init()
 {
+    setvbuf(stdout, 0, _IONBF, 0);
     // put your customization here
     systemTime = 0;
     taskMain->quantum = DEF_TICKS;
@@ -539,14 +543,14 @@ task_t *scheduler()
             taskAux->din--;
         taskAux = taskAux->next;
     } while (taskAux != readyQueue);
-    //Depois de encontrarmos a tarefa que usará o processador, sua prioridade dinâmica volta para a inicial, que é a estática
+    // Depois de encontrarmos a tarefa que usará o processador, sua prioridade dinâmica volta para a inicial, que é a estática
     minPrio->din = minPrio->est;
     return minPrio;
 }
 
 void task_setprio(task_t *task, int prio)
 {
-    //condição para setar a prioridade, prioridade dinâmica e estática começam com o mesmo valor definido
+    // condição para setar a prioridade, prioridade dinâmica e estática começam com o mesmo valor definido
     if (task != NULL)
     {
         task->din = prio;
@@ -561,7 +565,7 @@ void task_setprio(task_t *task, int prio)
 
 int task_getprio(task_t *task)
 {
-    //get da prioridade estática
+    // get da prioridade estática
     if (task != NULL)
         return task->est;
     return taskExec->est;
