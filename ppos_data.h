@@ -31,6 +31,7 @@ typedef struct task_t
    int tExec;
    int tProc;
    int act;
+   int isUserTask;
 } task_t ;
 
 // estrutura que define um semáforo
