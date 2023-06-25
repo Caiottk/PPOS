@@ -103,14 +103,7 @@ void after_task_create(task_t *task)
 void before_task_exit()
 {
     // put your customization here
-    taskExec->tExec = systime() - taskExec->tExec;
-    printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
-           taskExec->id, taskExec->tExec, taskExec->tProc, taskExec->act);
-    if (countTasks <= 2)
-    {
-        printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
-               taskDisp->id, taskExec->tExec, taskDisp->tProc, taskDisp->act);
-    }
+    
 
 #ifdef DEBUG
     printf("\ntask_exit - BEFORE - [%d]", taskExec->id);
@@ -120,6 +113,14 @@ void before_task_exit()
 void after_task_exit()
 {
     // put your customization here
+    taskExec->tExec = systime() - taskExec->tExec;
+    printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
+           taskExec->id, taskExec->tExec, taskExec->tProc, taskExec->act);
+    if (countTasks < 2)
+    {
+        printf("Task %d exit: execution time %d ms, processor time %d ms, %d activations\n",
+               taskDisp->id, taskExec->tExec, taskDisp->tProc, taskDisp->act);
+    }
 #ifdef DEBUG
     printf("\ntask_exit - AFTER- [%d]", taskExec->id);
 #endif

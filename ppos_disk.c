@@ -7,15 +7,12 @@ static struct sigaction actDisk;
 // flag que sinaliza se um disco está ocupado para operações de E/S
 int tReqs;
 
-
-
 void diskDriverBody();
 
 int diskSched();
 
 void disk_handle(int signum)
 {
-    
     disk.pacotes++;
     sem_up(&disk.cheio);
     disk.tExec += systemTime - disk.tIn;
@@ -40,8 +37,8 @@ int create_disk_request(int block, void *buffer, int cmd)
 
 // inicializacao do gerente de disco
 // retorna -1 em erro ou 0 em sucesso
-// numBlocks: numBlocksanho do disco, em blocos
-// blockSize: numBlocksanho de cada bloco do disco, em bytes
+// numBlocks: nº blocos do disco, em blocos
+// blockSize: tamanho de um bloco do disco, em bytes
 int disk_mgr_init(int *numBlocks, int *blockSize)
 {
 
@@ -94,7 +91,7 @@ int disk_mgr_init(int *numBlocks, int *blockSize)
 
     // flag de escalonador
     disk.sched = 0;
-    tReqs = disk.numBlocks*2;
+    tReqs = disk.numBlocks * 2;
 
     task_create(&disk.task, diskDriverBody, NULL);
     task_setprio(&disk.task, 0);
@@ -107,12 +104,10 @@ void diskDriverBody()
     while (disk.init == 1)
     {
         tReqs--;
-        printf("%d\n", tReqs);
-        if(tReqs == 0) disk.init = 0;
+        if (tReqs == 0)
+            disk.init = 0;
         sem_down(&disk.vazio);
         diskSched();
-        
-        
     }
     printf("Numero de blocos percorridos %d\nTempo de execução do disco %d ms\n",
            disk.qtdBlocosPer, disk.tExec);
@@ -122,9 +117,10 @@ void diskDriverBody()
 // leitura de um bloco, do disco para o buffer
 int disk_block_read(int block, void *buffer)
 {
-    int cmd = DISK_CMD_READ;
+    if (block < 0 || !buffer)
+        return -1;
 
-    create_disk_request(block, buffer, cmd);
+    create_disk_request(block, buffer, DISK_CMD_READ);
 
     mutex_lock(&disk.mreq);
 
@@ -134,19 +130,19 @@ int disk_block_read(int block, void *buffer)
         sem_down(&disk.cheio);
     }
     disk.pacotes--;
-    
+
     mutex_unlock(&disk.mreq);
-    
+
     return 0;
 }
 
 // escrita de um bloco, do buffer para o disco
 int disk_block_write(int block, void *buffer)
 {
-    int op = DISK_CMD_WRITE;
+    if (block < 0 || !buffer)
+        return -1;
 
-    // coloca tarefa na fila para acessar o disco
-    create_disk_request(block, buffer, op);
+    create_disk_request(block, buffer, DISK_CMD_WRITE);
 
     mutex_lock(&disk.mreq);
 
@@ -156,7 +152,7 @@ int disk_block_write(int block, void *buffer)
         sem_down(&disk.cheio);
     }
     disk.pacotes = 0;
-    
+
     mutex_unlock(&disk.mreq);
 
     return 0;
@@ -169,36 +165,28 @@ disk_request_t *FCFS_sched()
     return disk_queue;
 }
 
-disk_request_t *SSTF_sched()
+disk_request_t *SSTF_sched(int size, disk_request_t *it)
 {
-    int size = queue_size((queue_t *)disk_queue);
-    int i = 0;
-    disk_request_t *iter = disk_queue;
-
     int head = disk.block;
     int menor = INT_MAX;
     disk_request_t *menor_req = NULL;
 
     int aux;
-    for (i = 0; i < size && iter != NULL; i++, iter = iter->next)
+    for (int i = 0; i < size && it != NULL; i++, it = it->next)
     {
-        aux = abs(iter->block - head);
+        aux = abs(it->block - head);
         if (aux < menor)
         {
             menor = aux;
-            menor_req = iter;
+            menor_req = it;
         }
     }
 
     return menor_req;
 }
 
-disk_request_t *CSCAN_sched()
+disk_request_t *CSCAN_sched(int size, disk_request_t *it)
 {
-    int size = queue_size((queue_t *)disk_queue);
-    int i = 0;
-    disk_request_t *iter = disk_queue;
-
     int head = disk.block;
     int menor_frente = INT_MAX;
     int menor = INT_MAX;
@@ -207,46 +195,46 @@ disk_request_t *CSCAN_sched()
 
     int aux;
     int frente = 0;
-    for (i = 0; i < size && iter != NULL; i++, iter = iter->next)
+    for (int i = 0; i < size && it != NULL; i++, it = it->next)
     {
-        aux = iter->block - head;
+        aux = it->block - head;
         if (aux >= 0)
         {
             frente = 1;
             if (aux < menor_frente)
             {
                 menor_frente = aux;
-                menor_req = iter;
+                menor_req = it;
             }
         }
         else
         {
-            aux = iter->block;
+            aux = it->block;
             if (aux < menor)
             {
                 menor = aux;
-                menor_req2 = iter;
+                menor_req2 = it;
             }
         }
     }
 
     if (frente)
-    {
         return menor_req;
-    }
+
     else
-    {
         return menor_req2;
-    }
 }
 
 int diskSched()
 {
-    if (disk_queue == NULL){
+    if (disk_queue == NULL)
+    {
         return 0;
     }
     disk_request_t *req, *aux;
 
+    int size = queue_size((queue_t *)disk_queue);
+    disk_request_t *iter = disk_queue;
     switch (disk.sched)
     {
     case 0:
@@ -254,11 +242,11 @@ int diskSched()
         break;
 
     case 1:
-        req = SSTF_sched();
+        req = SSTF_sched(size, iter);
         break;
 
     case 2:
-        req = CSCAN_sched();
+        req = CSCAN_sched(size, iter);
         break;
 
     default:
@@ -283,11 +271,10 @@ int diskSched()
 
     disk.block = req_block;
     disk.buffer = req_buffer;
-    
-    int result = disk_cmd(req_operation, disk.block, disk.buffer);
-    if (result != 0)
+
+    if (disk_cmd(req_operation, disk.block, disk.buffer) != 0)
     {
-        printf("Falha ao ler/escrever o bloco %d %d %p %d %d\n", disk.block, result, disk.buffer, disk.numBlocks, disk.state);
+        printf("Falha ao ler/escrever o bloco %d %p %d %d\n", disk.block, disk.buffer, disk.numBlocks, disk.state);
         sem_up(&disk.cheio);
         return -1;
     }
