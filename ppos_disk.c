@@ -13,9 +13,9 @@ int diskSched();
 
 void disk_handle(int signum)
 {
-    disk.pacotes++;
-    sem_up(&disk.cheio);
-    disk.tExec += systemTime - disk.tIn;
+    disk.pacotes++; // indica que a requisição foi concluída 
+    sem_up(&disk.cheio); // sinaliza que uma requisição foi concluída
+    disk.tExec += systemTime - disk.tIn; // calcula o tempo de operação
 }
 
 int create_disk_request(int block, void *buffer, int cmd)
@@ -98,20 +98,20 @@ int disk_mgr_init(int *numBlocks, int *blockSize)
 
     return 0;
 }
-
+// corpo principal
 void diskDriverBody()
 {
     while (disk.init == 1)
     {
-        tReqs--;
-        if (tReqs == 0)
-            disk.init = 0;
-        sem_down(&disk.vazio);
-        diskSched();
+        // tReqs--; // 
+        // if (tReqs == 0)
+        //     disk.init = 0;
+        sem_down(&disk.vazio); // sinaliza que há uma requisição a ser processada
+        diskSched(); // próxima requisição e como ela vai ser atendida de acordo com o escalonador
     }
     printf("Numero de blocos percorridos %d\nTempo de execução do disco %d ms\n",
            disk.qtdBlocosPer, disk.tExec);
-    task_exit(0);
+    task_exit(0); // encerra a tarefa do driver de disco
 }
 
 // leitura de um bloco, do disco para o buffer
@@ -122,12 +122,12 @@ int disk_block_read(int block, void *buffer)
 
     create_disk_request(block, buffer, DISK_CMD_READ);
 
-    mutex_lock(&disk.mreq);
+    mutex_lock(&disk.mreq); // garante que apenas uma requisição seja processada por vez
 
-    if (disk.pacotes == 0)
+    if (disk.pacotes == 0) // se a fila de requisições está vazia
     {
-        sem_up(&disk.vazio);
-        sem_down(&disk.cheio);
+        sem_up(&disk.vazio); // sinaliza que há uma requisição disponível para ser processada
+        sem_down(&disk.cheio); // aguarda a conclusão da requisição
     }
     disk.pacotes--;
 
@@ -151,7 +151,7 @@ int disk_block_write(int block, void *buffer)
         sem_up(&disk.vazio);
         sem_down(&disk.cheio);
     }
-    disk.pacotes = 0;
+    disk.pacotes --;
 
     mutex_unlock(&disk.mreq);
 
@@ -227,11 +227,11 @@ disk_request_t *CSCAN_sched(int size, disk_request_t *it)
 
 int diskSched()
 {
-    if (disk_queue == NULL)
+    if (disk_queue == NULL) 
     {
-        return 0;
+        return 0; // indica que não ouve necessidade de processar nenhuma requisição
     }
-    disk_request_t *req, *aux;
+    disk_request_t *req, *aux; // armazenam a requisição selecionada e requisição temporária removida da fila
 
     int size = queue_size((queue_t *)disk_queue);
     disk_request_t *iter = disk_queue;
@@ -257,7 +257,7 @@ int diskSched()
     void *req_buffer = req->buffer;
     int req_operation = req->op;
 
-    aux = (disk_request_t *)queue_remove((queue_t **)&disk_queue, (queue_t *)req);
+    aux = (disk_request_t *)queue_remove((queue_t **)&disk_queue, (queue_t *)req); // remove a requisição da fila 
     free(req);
 
     disk.state = disk_cmd(DISK_CMD_STATUS, 0, 0);
@@ -266,16 +266,16 @@ int diskSched()
         printf("disk_status = %d\n", disk.state);
         return -1;
     }
-    disk.tIn = systemTime;
-    disk.qtdBlocosPer += abs(req_block - disk.block);
+    disk.tIn = systemTime; // get do início do tempo da requisição
+    disk.qtdBlocosPer += abs(req_block - disk.block); // calcula o tanto de blocos que foram percorridos para cada requisição
 
-    disk.block = req_block;
-    disk.buffer = req_buffer;
+    disk.block = req_block; // atualiza o bloco atual de acordo com a requisição
+    disk.buffer = req_buffer; // atualiza o buffer com o buffer da requisição
 
-    if (disk_cmd(req_operation, disk.block, disk.buffer) != 0)
+    if (disk_cmd(req_operation, disk.block, disk.buffer) < 0) // executa a operação solicitada pela requisição no bloco selecionado com o buffer correspondente
     {
-        printf("Falha ao ler/escrever o bloco %d %p %d %d\n", disk.block, disk.buffer, disk.numBlocks, disk.state);
-        sem_up(&disk.cheio);
+        printf("Falha ao processar requisição(E/S) no bloco %d %p %d %d\n", disk.block, disk.buffer, disk.numBlocks, disk.state);
+        sem_up(&disk.cheio); // libera o semáforo se a fila de requisições está cheia
         return -1;
     }
 }

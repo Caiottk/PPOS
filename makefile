@@ -10,7 +10,7 @@ LFLAGS = -lrt
 LIBS = -L/home/caio-/UTFPR/UTFPR2023.1/SO/ProjetoA/PingPongOS -lppos_static
 
 OBJS = ppos-core-aux.o disk.o ppos_disk.o
-PROG = pingpong-disco2
+PROG = pingpong-disco1 pingpong-disco2
  
 # default rule
 all: $(PROG)

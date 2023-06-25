@@ -1,0 +1,136 @@
+========== Funções implementadas ==========
+
+Tanto a função disk_block_read quanto a função disk_block_write seguem um padrão semelhante. 
+Elas criam uma nova requisição de leitura ou escrita, adicionam-na à fila de requisições do 
+disco e coordenam a comunicação entre as requisições e o driver do disco por meio de mutexes e 
+semáforos. Essas funções bloqueiam o processo chamador até que a requisição seja concluída, 
+garantindo a sincronização correta entre as operações de E/S e evitando condições de corrida.
+
+// leitura de um bloco, do disco para o buffer
+int disk_block_read(int block, void *buffer)
+{
+    if (block < 0 || !buffer)
+        return -1;
+
+    create_disk_request(block, buffer, DISK_CMD_READ);
+
+    mutex_lock(&disk.mreq); // garante que apenas uma requisição seja processada por vez
+
+    if (disk.pacotes == 0) // se a fila de requisições está vazia
+    {
+        sem_up(&disk.vazio); // sinaliza que há uma requisição disponível para ser processada
+        sem_down(&disk.cheio); // aguarda a conclusão da requisição
+    }
+    disk.pacotes--;
+
+    mutex_unlock(&disk.mreq);
+
+    return 0;
+}
+
+// escrita de um bloco, do buffer para o disco
+int disk_block_write(int block, void *buffer)
+{
+    if (block < 0 || !buffer)
+        return -1;
+
+    create_disk_request(block, buffer, DISK_CMD_WRITE);
+
+    mutex_lock(&disk.mreq);
+
+    if (disk.pacotes == 0)
+    {
+        sem_up(&disk.vazio);
+        sem_down(&disk.cheio);
+    }
+    disk.pacotes = 0;
+
+    mutex_unlock(&disk.mreq);
+
+    return 0;
+}
+
+Função executada pela tarefa que executa o gerenciador de disco, é responsável por processar as requisições
+de leitura e escrita, aplicando o escalonador adequado e coordenando as operações com o driver de disco.
+
+void diskDriverBody()
+{
+    while (disk.init == 1)
+    {
+        tReqs--;
+        if (tReqs == 0)
+            disk.init = 0;
+        sem_down(&disk.vazio);
+        diskSched();
+    }
+    printf("Numero de blocos percorridos %d\nTempo de execução do disco %d ms\n",
+           disk.qtdBlocosPer, disk.tExec);
+    task_exit(0);
+}
+
+Essa função é um tratador de sinal para o sinal SIGUSR1, que é acionado quando uma operação de leitura ou escrita no disco é concluída.
+
+void disk_handle(int signum)
+{
+    disk.pacotes++;
+    sem_up(&disk.cheio); // sinaliza que a 
+    disk.tExec += systemTime - disk.tIn;
+}
+
+Cada chamada seleciona e processa uma requisição de acordo com o escalonador definido, atualizando a 
+posição do cabeçote de leitura/gravação e os contadores relacionados ao desempenho do disco.
+
+int diskSched()
+{
+    if (disk_queue == NULL)
+    {
+        return 0;
+    }
+    disk_request_t *req, *aux;
+
+    int size = queue_size((queue_t *)disk_queue);
+    disk_request_t *iter = disk_queue;
+    switch (disk.sched)
+    {
+    case 0:
+        req = FCFS_sched();
+        break;
+
+    case 1:
+        req = SSTF_sched(size, iter);
+        break;
+
+    case 2:
+        req = CSCAN_sched(size, iter);
+        break;
+
+    default:
+        req = FCFS_sched();
+    }
+
+    int req_block = req->block;
+    void *req_buffer = req->buffer;
+    int req_operation = req->op;
+
+    aux = (disk_request_t *)queue_remove((queue_t **)&disk_queue, (queue_t *)req);
+    free(req);
+
+    disk.state = disk_cmd(DISK_CMD_STATUS, 0, 0);
+    if (disk.state != DISK_STATUS_IDLE)
+    {
+        printf("disk_status = %d\n", disk.state);
+        return -1;
+    }
+    disk.tIn = systemTime;
+    disk.qtdBlocosPer += abs(req_block - disk.block);
+
+    disk.block = req_block;
+    disk.buffer = req_buffer;
+
+    if (disk_cmd(req_operation, disk.block, disk.buffer) != 0)
+    {
+        printf("Falha ao ler/escrever o bloco %d %p %d %d\n", disk.block, disk.buffer, disk.numBlocks, disk.state);
+        sem_up(&disk.cheio);
+        return -1;
+    }
+}

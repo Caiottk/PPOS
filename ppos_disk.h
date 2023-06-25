@@ -42,27 +42,27 @@ typedef struct disk_t
 {
   // completar com os campos necessarios
   // estruturas para auxiliar os estados do disco e coordenar a parte crítica
-  disk_request_t req; // fila responsável pela requisição dos discos
-  mutex_t mreq;
-  mutex_t mqueue;
-  semaphore_t vazio;
-  semaphore_t cheio;
-  task_t task;
+  disk_request_t req; // Fila de requisições de leitura/escrita do disco
+  mutex_t mreq; // Mutex para controle do acesso à fila de requisições
+  mutex_t mqueue; // Mutex para controle do acesso à fila de discos
+  semaphore_t vazio; // Semáforo que indica se a fila de requisições está vazia
+  semaphore_t cheio; // Semáforo que indica se a fila de requisições está cheia
+  task_t task; //Tarefa que executa o gerenciador de disco
 
   // atributos de um disco 
-  int numBlocks;
-  int blockSize;
-  int block;
-  void* buffer;
-  int tIn;
-  int qtdBlocosPer;
-  int tExec;
+  int numBlocks; // Número de blocos do disco
+  int blockSize; // Tamanho de cada bloco do disco em bytes
+  int block; // Número do bloco atual do disco
+  void* buffer; // Buffer utilizado para leitura/escrita de blocos
+  int tIn; // Tempo de início da execução de uma requisição
+  int qtdBlocosPer; // Quantidade de blocos percorridos
+  int tExec; // Tempo total de execução do disco.
 
   // flags para coodernar requisições
-  char init;
-  int state;
-  short pacotes; // contador para coordenar a comunicação entre os processos de requisições pendentes na fila dos disco
-  int sched;
+  char init; // Flag que indica se o disco foi inicializado
+  int state; // Estado atual do disco
+  short pacotes; // Contador para coordenação da comunicação entre os processos de requisições pendentes na fila do disco
+  int sched; //  Flag do escalonador
 } disk_t;
 
 // disco
